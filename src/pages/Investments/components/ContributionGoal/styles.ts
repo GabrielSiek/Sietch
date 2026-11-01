@@ -3,9 +3,9 @@ import { Card, Empty } from '@/components/ui';
 
 export const Container = styled(Card)``;
 export const Progress = styled.div`display: flex; align-items: center; gap: 20px;`;
-export const Ring = styled.div`position: relative; width: 112px; height: 112px; border-radius: 50%; flex-shrink: 0;`;
+export const Ring = styled.div`position: relative; width: 112px; height: 112px; flex-shrink: 0;`;
 export const RingHole = styled.div`
-  position: absolute; inset: 12px; border-radius: 50%; background: var(--surface); display: grid; place-items: center;
+  position: absolute; inset: 12px; border-radius: 50%; display: grid; place-items: center;
   font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
 `;
 export const Figures = styled.div`display: flex; flex-direction: column; gap: 4px; min-width: 0;`;

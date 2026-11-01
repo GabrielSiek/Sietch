@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { ChartConfiguration } from 'chart.js';
 import type { SpendingData } from '@shared/types';
-import { areaFill, chartTheme, crosshair, tooltip } from '@/lib/charts';
+import { areaFill, chartTheme, crosshair, stagger, tooltip } from '@/lib/charts';
 import { brl, brlCompact, fmtMonthName } from '@/lib/format';
 import { useStore } from '@/store';
 import { Chip, Legend, Muted, Swatch } from '@/components/ui';
@@ -63,7 +63,7 @@ function paceChart(pd: PaceData, month: string, prevMonth: string): ChartConfigu
       ],
     },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: false,
+      responsive: true, maintainAspectRatio: false, animation: stagger(),
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },

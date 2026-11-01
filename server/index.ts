@@ -15,7 +15,11 @@ import type { PluggyItem } from './pluggy-types.ts';
 import { CATEGORY_KEYS, buildPortfolio, summarizeItem, todayInBrazil, type Overrides } from './portfolio.ts';
 import { cleanAmount, cleanBudgets, cleanGoals, cleanGroups, loadSettings } from './settings.ts';
 import { buildSpending, loadTransactions } from './spending.ts';
-import { OVERRIDES_FILE, ROOT, SETTINGS_FILE, loadItemIds, readJsonFile, saveItemIds, writeJsonFile } from './storage.ts';
+import type { SegmentOverrides } from './segments.ts';
+import { OVERRIDES_FILE, ROOT, SEGMENTS_FILE, SETTINGS_FILE, loadItemIds, readJsonFile, saveItemIds, writeJsonFile } from './storage.ts';
+import { SEGMENTS } from '../shared/segments.ts';
+
+const SEGMENT_KEYS = new Set(Object.values(SEGMENTS).flatMap((s) => Object.keys(s)));
 
 const DEV = process.argv.includes('--dev');
 const DIST_DIR = join(ROOT, 'dist');
@@ -167,6 +171,18 @@ const routes: Record<string, Handler> = {
     if (category) overrides[key.toUpperCase()] = category;
     else delete overrides[key.toUpperCase()];
     await writeJsonFile(OVERRIDES_FILE, overrides);
+    return overrides;
+  },
+
+  // Manually set (or with segment: null, reset) the segment of a ticker within its class.
+  'POST /api/segments': async (req) => {
+    const { key, segment } = await readJson<{ key?: unknown; segment?: unknown }>(req);
+    if (!key || typeof key !== 'string') throw new HttpError(400, 'key is required.');
+    if (segment != null && (typeof segment !== 'string' || !SEGMENT_KEYS.has(segment))) throw new HttpError(400, `segment must be one of ${[...SEGMENT_KEYS].join(', ')}.`);
+    const overrides = await readJsonFile<SegmentOverrides>(SEGMENTS_FILE, {});
+    if (segment) overrides[key.toUpperCase()] = segment;
+    else delete overrides[key.toUpperCase()];
+    await writeJsonFile(SEGMENTS_FILE, overrides);
     return overrides;
   },
 };

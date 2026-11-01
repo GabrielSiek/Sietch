@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { segmentsOf } from '@shared/segments';
 import { api, errorMessage } from '@/lib/api';
-import { ASSET_CLASSES, CATEGORIES, cat, soft } from '@/lib/categories';
+import { ASSET_CLASSES, CATEGORIES, cat, segmentColor, soft } from '@/lib/categories';
 import { brl, fmtDate, money, num, pct, signedBrl, signedPct } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import { reload, showError } from '@/store';
@@ -30,6 +31,8 @@ interface Props {
 
 export function HoldingRow({ row: i, child = false, maxW, open = [], onToggle }: Props) {
   const [pending, setPending] = useState<string | null>(null);
+  const [pendingSegment, setPendingSegment] = useState<string | null>(null);
+  const segments = segmentsOf(i.category);
   const c = cat(i.category);
   const group = isGroup(i) ? i : null;
   const lot: Holding | null = isGroup(i) ? null : i;
@@ -37,18 +40,18 @@ export function HoldingRow({ row: i, child = false, maxW, open = [], onToggle }:
   const title = child && i.dueDate ? `Vence em ${fmtDate(i.dueDate)}` : i.title;
   const sub = child && lot ? (lot.cost != null ? `Aplicado ${brl(lot.cost)}` : lot.rateLabel) : i.sub;
   const keys = group ? group.categoryKeys : [lot!.categoryKey];
-  const dot = `radial-gradient(circle, var(${c.color}) 0 3.5px, transparent 4px)`;
+  const dotOf = (color: string) => `radial-gradient(circle, var(${color}) 0 3.5px, transparent 4px)`;
 
-  const changeClass = async (category: string) => {
-    setPending(category);
+  const save = async (field: 'category' | 'segment', value: string, mark: (v: string | null) => void) => {
+    mark(value);
     try {
       // A grouped row carries every lot's key; save them one by one so the overrides file isn't written concurrently.
-      for (const key of keys) await api.post('/categories', { key, category });
+      for (const key of keys) await api.post(field === 'category' ? '/categories' : '/segments', { key, [field]: value });
       await reload();
     } catch (err) {
       showError(errorMessage(err));
     } finally {
-      setPending(null);
+      mark(null);
     }
   };
 
@@ -64,21 +67,35 @@ export function HoldingRow({ row: i, child = false, maxW, open = [], onToggle }:
           {!child && <Tile $bg={soft(c.color)}>{i.short}</Tile>}
           <Names><b title={group ? group.hint : lot!.name}>{title}</b><small>{sub}</small></Names>
         </CellMain>
-        <Cell as="div">
+        <Styled.ClassCell>
           {!child && (
             <Styled.ClassSelect
               value={pending ?? i.category}
               disabled={pending != null}
               aria-label={`Classe de ${i.title}`}
               title={SOURCE_HINT[i.categorySource] ?? ''}
-              style={{ backgroundImage: `${dot}, ${CARET}` }}
+              style={{ backgroundImage: `${dotOf(c.color)}, ${CARET}` }}
               onClick={(e) => e.stopPropagation()}
-              onChange={(e) => void changeClass(e.target.value)}
+              onChange={(e) => void save('category', e.target.value, setPending)}
             >
               {ASSET_CLASSES.map((k) => <option key={k} value={k}>{CATEGORIES[k].label}</option>)}
             </Styled.ClassSelect>
           )}
-        </Cell>
+          {!child && segments && (
+            <Styled.SegmentSelect
+              value={pendingSegment ?? i.segment ?? ''}
+              disabled={pendingSegment != null}
+              aria-label={`Segmento de ${i.title}`}
+              title={i.segmentManual ? 'Segmento definido por você.' : 'Segmento deduzido automaticamente — altere se estiver errado.'}
+              style={{ backgroundImage: `${dotOf(segmentColor(pendingSegment ?? i.segment))}, ${CARET}` }}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => void save('segment', e.target.value, setPendingSegment)}
+            >
+              {!i.segment && <option value="" disabled>Definir segmento</option>}
+              {Object.entries(segments).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </Styled.SegmentSelect>
+          )}
+        </Styled.ClassCell>
         <Cell $right>{lot && lot.quantity != null && lot.category !== 'RENDA_FIXA' ? num(lot.quantity, 4) : '—'}</Cell>
         <Styled.MutedCell $right>{lot?.avgPrice != null ? money(lot.avgPrice, lot.currencyCode) : '—'}</Styled.MutedCell>
         <Cell $right>{lot && lot.value != null && lot.category !== 'RENDA_FIXA' ? money(lot.value, lot.currencyCode) : '—'}</Cell>

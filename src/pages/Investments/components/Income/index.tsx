@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { ChartConfiguration } from 'chart.js';
 import type { Portfolio } from '@shared/types';
 import { CATEGORIES } from '@/lib/categories';
-import { chartTheme, cssVar, tooltip } from '@/lib/charts';
+import { chartTheme, cssVar, stagger, tooltip } from '@/lib/charts';
 import { brl, brlCompact, fmtMonth, fmtMonthYear } from '@/lib/format';
 import { useStore } from '@/store';
 import { Empty, Legend, Swatch } from '@/components/ui';
@@ -30,7 +30,7 @@ export function Income({ p }: { p: Portfolio }) {
         })),
       },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
+        responsive: true, maintainAspectRatio: false, animation: stagger(500, 120),
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
