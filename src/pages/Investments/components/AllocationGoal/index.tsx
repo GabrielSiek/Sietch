@@ -1,11 +1,11 @@
 import type { Goals } from '@shared/types';
 import { ASSET_CLASSES, CATEGORIES } from '@/lib/categories';
-import { brl, brl0, num } from '@/lib/format';
+import { brl, brl0, num, plural } from '@/lib/format';
 import { ICON } from '@/lib/icons';
 import { Button, Empty, Legend, Muted, Swatch } from '@/components/ui';
 import { CardHeader } from '@/components/CardHeader';
 import { Icon } from '@/components/Icon';
-import type { Derived } from '../../derive';
+import { contributionPlan, type Derived, type PlanPick } from '../../derive';
 import * as Styled from './styles';
 
 interface Props {
@@ -24,7 +24,7 @@ export function AllocationGoal({ goals: g, d, aportado }: Props) {
         <Button as="a" $size="sm" href="#/configuracoes"><Icon d={ICON.edit} size={16} />Editar metas</Button>
       </CardHeader>
       {Object.keys(targets).length
-        ? <Allocation targets={targets} d={d} remaining={g.monthlyContribution ? Math.max(g.monthlyContribution - Math.max(aportado, 0), 0) : 0} />
+        ? <Allocation goals={g} d={d} remaining={g.monthlyContribution ? Math.max(g.monthlyContribution - Math.max(aportado, 0), 0) : 0} />
         : (
           <Empty as="div">
             Defina o percentual que você quer em cada classe (ex.: 40% renda fixa, 25% FIIs…) para comparar com a carteira atual.<br />
@@ -35,33 +35,44 @@ export function AllocationGoal({ goals: g, d, aportado }: Props) {
   );
 }
 
-function Allocation({ targets, d, remaining }: { targets: Goals['allocation']; d: Derived; remaining: number }) {
+function Allocation({ goals, d, remaining }: { goals: Goals; d: Derived; remaining: number }) {
+  const targets = goals.allocation;
   const keys = ASSET_CLASSES.filter((k) => targets[k] || d.classes[k].value > 0);
   const curOf = (k: (typeof keys)[number]) => (d.total ? (d.classes[k].value / d.total) * 100 : 0);
   const scale = Math.max(40, Math.ceil(Math.max(...keys.map((k) => Math.max(curOf(k), targets[k] ?? 0))) / 10) * 10);
 
-  let suggest = null;
-  if (remaining > 0) {
-    const newTotal = d.total + remaining;
-    const defs = keys.map((k) => ({ k, gap: Math.max(((targets[k] ?? 0) / 100) * newTotal - d.classes[k].value, 0) })).filter((x) => x.gap > 0);
-    const sum = defs.reduce((s, x) => s + x.gap, 0);
-    if (sum > 0) {
-      suggest = (
-        <Styled.Suggest>
-          <div><Styled.SuggestTitle>Onde aportar os {brl(remaining)} que faltam</Styled.SuggestTitle><br /><small>Sugestão para aproximar a carteira do alvo sem vender nada</small></div>
-          <Styled.Items>
-            {defs.sort((a, b) => b.gap - a.gap).map((x) => (
-              <Styled.Item key={x.k}>
-                <Swatch as="span" $color={CATEGORIES[x.k].color} />
-                <Styled.ItemLabel>{CATEGORIES[x.k].label}</Styled.ItemLabel>
-                <b>{brl((remaining * x.gap) / sum)}</b>
-              </Styled.Item>
+  const plan = contributionPlan(d, goals, remaining);
+  const suggest = plan.length > 0 && (
+    <Styled.Suggest>
+      <div>
+        <Styled.SuggestTitle>Onde aportar os {brl(remaining)} que faltam</Styled.SuggestTitle><br />
+        <small>Sugestão para aproximar a carteira do alvo sem vender nada · ativos preferidos em <a href="#/configuracoes">Configurações</a></small>
+      </div>
+      <Styled.Items>
+        {plan.map((x) => (
+          <Styled.Item key={x.key}>
+            <Styled.ItemHead>
+              <Swatch as="span" $color={CATEGORIES[x.key].color} />
+              <Styled.ItemLabel>{CATEGORIES[x.key].label}</Styled.ItemLabel>
+              <b>{brl(x.amount)}</b>
+            </Styled.ItemHead>
+            {x.segments.map((sg) => (
+              <Styled.SegLine key={sg.segment ?? ''}>
+                {sg.segment && (
+                  <Styled.SegName><Swatch as="span" $color={sg.color} />{sg.label}<Muted>{brl(sg.amount)}</Muted></Styled.SegName>
+                )}
+                <Styled.Picks>
+                  {sg.picks.length
+                    ? sg.picks.map((pk) => <Pick key={pk.name} pick={pk} amount={sg.amount / sg.picks.length} />)
+                    : <Muted as="small">Defina ativos preferidos em Configurações</Muted>}
+                </Styled.Picks>
+              </Styled.SegLine>
             ))}
-          </Styled.Items>
-        </Styled.Suggest>
-      );
-    }
-  }
+          </Styled.Item>
+        ))}
+      </Styled.Items>
+    </Styled.Suggest>
+  );
 
   return (
     <>
@@ -94,5 +105,18 @@ function Allocation({ targets, d, remaining }: { targets: Goals['allocation']; d
       </div>
       {suggest}
     </>
+  );
+}
+
+/** A go-to asset, with how many shares the amount buys when its quote is known. */
+function Pick({ pick, amount }: { pick: PlanPick; amount: number }) {
+  const shares = pick.price ? Math.floor(amount / pick.price) : null;
+  const hint = pick.fallback ? 'Sua menor posição aqui — escolha ativos preferidos em Configurações' : undefined;
+  return (
+    <Styled.PickChip title={hint}>
+      <b>{pick.name}</b>
+      {shares != null && <Muted>{shares >= 1 ? `≈ ${plural(shares, 'cota', 'cotas')}` : `cota ${brl(pick.price!)}`}</Muted>}
+      {pick.fallback && <Muted>reforço</Muted>}
+    </Styled.PickChip>
   );
 }

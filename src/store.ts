@@ -17,7 +17,7 @@ export interface AppState {
 }
 
 const EMPTY_SETTINGS: Settings = {
-  goals: { monthlyContribution: null, wealthTarget: null, wealthDate: null, monthlyRate: 0.9, allocation: {} },
+  goals: { monthlyContribution: null, wealthTarget: null, wealthDate: null, monthlyRate: 0.9, allocation: {}, segmentAllocation: {}, goTo: {} },
   budgets: {}, budgetTotal: null, monthlyIncome: null, txRules: {}, groups: [], txGroups: {}, excludedAccounts: [],
 };
 

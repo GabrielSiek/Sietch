@@ -46,10 +46,10 @@ export function InvestmentsPage({ focusGoals }: { focusGoals: boolean }) {
   const present = ASSET_CLASSES.filter((k) => d.classes[k].count > 0);
   // A filter for a class you no longer hold shows everything.
   const active: ClassFilter = filter !== 'ALL' && !present.includes(filter) ? 'ALL' : filter;
+  // Picking a class narrows the overview (patrimônio and distribuição) and the holdings table to it.
   const toggleClass = (k: CategoryKey) => {
-    const next = active === k ? 'ALL' : k;
-    setFilter(next);
-    if (next !== 'ALL') document.getElementById('holdings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFilter(active === k ? 'ALL' : k);
+    document.getElementById('overview')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
   return (
@@ -58,8 +58,8 @@ export function InvestmentsPage({ focusGoals }: { focusGoals: boolean }) {
       sub={sub}
       actions={<SearchField label="Buscar ativo" placeholder="Buscar ativo" value={search} onChange={setSearch} />}
     >
-      <Row><Hero p={p} d={d} /><Distribution d={d} /></Row>
-      <ClassCards p={p} d={d} filter={active} onToggle={toggleClass} />
+      <Row id="overview"><Hero p={p} d={d} filter={active} /><Distribution d={d} filter={active} onClear={() => setFilter('ALL')} /></Row>
+      <ClassCards p={p} d={d} filter={active} onToggle={toggleClass} targets={settings.goals.allocation ?? {}} />
       <Goals p={p} d={d} goals={settings.goals} />
       <Row><Income p={p} /><Movers d={d} /></Row>
       <Holdings d={d} filter={active} onFilter={setFilter} search={search} present={present} />

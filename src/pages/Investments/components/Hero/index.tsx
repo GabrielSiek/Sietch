@@ -1,19 +1,30 @@
 import { useMemo, type ReactNode } from 'react';
 import type { ChartConfiguration } from 'chart.js';
 import type { Portfolio } from '@shared/types';
-import { areaFill, chartTheme, crosshair, tooltip } from '@/lib/charts';
-import { arrowPct, brl, brlCompact, fmtDate, fmtDayMonth, plural, signedBrl, signedPct } from '@/lib/format';
+import { CATEGORIES } from '@/lib/categories';
+import { areaFill, chartTheme, crosshair, stagger, tooltip } from '@/lib/charts';
+import { arrowPct, brl, brlCompact, fmtDate, fmtDayMonth, pct, plural, signedBrl, signedPct } from '@/lib/format';
 import { useSessionState } from '@/lib/hooks';
 import { useStore } from '@/store';
 import { CardHead, CardTitles, Chip, Legend, Muted, Seg, SegButton, Stat, Stats, Swatch, Toned, toneOf } from '@/components/ui';
 import { ChartCanvas } from '@/components/ChartCanvas';
-import { PERIODS, growthSeries, type Derived } from '../../derive';
+import { PERIODS, growthSeries, type ClassFilter, type Derived } from '../../derive';
 import * as Styled from './styles';
 
-export function Hero({ p, d }: { p: Portfolio; d: Derived }) {
+interface Props {
+  p: Portfolio;
+  d: Derived;
+  /** A class picked in the class cards: shows just that class. */
+  filter: ClassFilter;
+}
+
+export function Hero({ p, d, filter }: Props) {
   const [period, setPeriod] = useSessionState('inv.period', 365);
   const dark = useStore((s) => s.dark);
-  const series = useMemo(() => growthSeries(p, d, period), [p, d, period]);
+  const series = useMemo(() => growthSeries(p, d, period, filter), [p, d, period, filter]);
+  const c = filter === 'ALL' ? null : d.classes[filter];
+  const v = c ?? d;
+  const total = c ? c.value : d.total;
   const known = series.value.filter((v): v is number => v != null);
   const word = PERIODS.find((x) => x[1] === period)![2];
   let chip: ReactNode = null, label: string;
@@ -21,14 +32,14 @@ export function Hero({ p, d }: { p: Portfolio; d: Derived }) {
     const delta = known.at(-1)! - known[0];
     chip = <Chip $tone={toneOf(delta)}>{arrowPct(known[0] ? delta / known[0] : 0)}</Chip>;
     label = `${signedBrl(delta)} ${word}`;
-  } else if (d.cost > 0) {
-    chip = <Chip $tone={toneOf(d.profit)}>{arrowPct(d.profit / d.cost)}</Chip>;
+  } else if (v.cost > 0) {
+    chip = <Chip $tone={toneOf(v.profit)}>{arrowPct(v.profit / v.cost)}</Chip>;
     label = 'desde o início · o histórico diário começa hoje';
   } else {
     label = 'O histórico diário começa hoje';
   }
   const missing = p.coverage.total - p.coverage.withHistory;
-  const profitTone = d.profit >= 0 ? 'pos' : 'neg';
+  const profitTone = v.profit >= 0 ? 'pos' : 'neg';
 
   const config = useMemo(() => (canvas: HTMLCanvasElement): ChartConfiguration<'line', (number | null)[], string> => {
     const t = chartTheme();
@@ -49,7 +60,7 @@ export function Hero({ p, d }: { p: Portfolio; d: Derived }) {
         ],
       },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false,
+        responsive: true, maintainAspectRatio: false, animation: stagger(),
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
@@ -68,8 +79,8 @@ export function Hero({ p, d }: { p: Portfolio; d: Derived }) {
     <Styled.Container>
       <CardHead>
         <CardTitles $gap={8}>
-          <Styled.Label>Patrimônio investido</Styled.Label>
-          <Styled.Value>{brl(d.total)}</Styled.Value>
+          <Styled.Label>{filter === 'ALL' ? 'Patrimônio investido' : `Patrimônio em ${CATEGORIES[filter].label}`}</Styled.Label>
+          <Styled.Value>{brl(total)}</Styled.Value>
           <Styled.Meta>{chip}<span>{label}</span></Styled.Meta>
         </CardTitles>
         <Seg role="group" aria-label="Período">
@@ -82,13 +93,15 @@ export function Hero({ p, d }: { p: Portfolio; d: Derived }) {
       </Legend>
       <ChartCanvas config={config} aria-label="Evolução do patrimônio e do valor aplicado" />
       <Stats>
-        <Stat><span>Valor aplicado</span><b>{brl(d.invested)}</b></Stat>
-        <Stat><span>Resultado</span><Toned as="b" $tone={profitTone}>{signedBrl(d.profit)}</Toned></Stat>
-        <Stat><span>Rentabilidade total</span><Toned as="b" $tone={profitTone}>{d.cost ? signedPct(d.profit / d.cost) : '–'}</Toned></Stat>
-        <Stat><span>Proventos (12 meses)</span><b>{brl(d.income12m)}</b></Stat>
-        <Stat><span>Saldo em conta</span><b>{brl(d.cash)}</b></Stat>
+        <Stat><span>Valor aplicado</span><b>{brl(v.invested)}</b></Stat>
+        <Stat><span>Resultado</span><Toned as="b" $tone={profitTone}>{signedBrl(v.profit)}</Toned></Stat>
+        <Stat><span>Rentabilidade total</span><Toned as="b" $tone={profitTone}>{v.cost ? signedPct(v.profit / v.cost) : '–'}</Toned></Stat>
+        <Stat><span>Proventos (12 meses)</span><b>{brl(v.income12m)}</b></Stat>
+        {c
+          ? <Stat><span>Peso na carteira</span><b>{pct(d.total ? c.value / d.total : 0)}</b></Stat>
+          : <Stat><span>Saldo em conta</span><b>{brl(d.cash)}</b></Stat>}
       </Stats>
-      {missing > 0 && <Muted as="small">{plural(missing, 'ativo', 'ativos')} sem movimentações informadas — o valor aplicado deles entra na data da compra.</Muted>}
+      {!c && missing > 0 && <Muted as="small">{plural(missing, 'ativo', 'ativos')} sem movimentações informadas — o valor aplicado deles entra na data da compra.</Muted>}
     </Styled.Container>
   );
 }

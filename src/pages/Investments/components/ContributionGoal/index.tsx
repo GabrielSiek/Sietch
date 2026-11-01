@@ -1,9 +1,14 @@
+import { useMemo } from 'react';
+import type { ChartConfiguration } from 'chart.js';
 import { cat } from '@/lib/categories';
+import { cssVar } from '@/lib/charts';
 import { addMonths, brl, fmtDay, fmtMonth, fmtMonthName, num, plural, todayIso } from '@/lib/format';
 import { ICON } from '@/lib/icons';
+import { useStore } from '@/store';
 import { Button, Chip, Empty, ListRow, Muted, RowMain, Swatch } from '@/components/ui';
 import { CardHeader } from '@/components/CardHeader';
 import { Icon } from '@/components/Icon';
+import { ChartCanvas } from '@/components/ChartCanvas';
 import type { monthContributions } from '../../derive';
 import * as Styled from './styles';
 
@@ -42,9 +47,7 @@ export function ContributionGoal({ goal, month: { thisMonth, monthAportes, aport
         <Chip $tone={ratio >= 1 ? 'pos' : 'warn'}>{ratio >= 1 ? 'Meta batida' : plural(daysLeft, 'dia restante', 'dias restantes')}</Chip>
       </CardHeader>
       <Styled.Progress>
-        <Styled.Ring role="img" aria-label={`Meta de aporte ${Math.round(ratio * 100)}% concluída`} style={{ background: `conic-gradient(var(--accent) 0 ${Math.min(ratio, 1) * 100}%, var(--surface-2) 0 100%)` }}>
-          <Styled.RingHole>{Math.round(ratio * 100)}%</Styled.RingHole>
-        </Styled.Ring>
+        <GoalRing ratio={ratio} />
         <Styled.Figures>
           <Muted as="small">Aportado</Muted>
           <Styled.Amount>{brl(Math.max(aportado, 0))}</Styled.Amount>
@@ -79,5 +82,22 @@ export function ContributionGoal({ goal, month: { thisMonth, monthAportes, aport
         </Styled.Months>
       </Styled.History>
     </Styled.Container>
+  );
+}
+
+/** Progress ring that sweeps up to the share of the goal reached. */
+function GoalRing({ ratio }: { ratio: number }) {
+  const dark = useStore((s) => s.dark);
+  const done = Math.min(ratio, 1);
+  const config = useMemo((): ChartConfiguration<'doughnut', number[], string> => ({
+    type: 'doughnut',
+    data: { datasets: [{ data: [done, 1 - done], backgroundColor: [cssVar('--accent'), cssVar('--surface-2')], borderWidth: 0 }] },
+    options: { responsive: false, cutout: '79%', events: [], plugins: { legend: { display: false }, tooltip: { enabled: false } } },
+  }), [done, dark]);
+  return (
+    <Styled.Ring>
+      <ChartCanvas config={config} size={112} aria-label={`Meta de aporte ${Math.round(ratio * 100)}% concluída`} />
+      <Styled.RingHole>{Math.round(ratio * 100)}%</Styled.RingHole>
+    </Styled.Ring>
   );
 }

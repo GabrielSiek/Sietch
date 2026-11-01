@@ -26,7 +26,18 @@ export const Suggest = styled.div`
 export const SuggestTitle = styled.b`color: var(--accent);`;
 export const Items = styled.div`display: flex; flex-wrap: wrap; gap: 10px;`;
 export const Item = styled.div`
-  flex: 1 1 160px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface);
-  font-size: 14px; font-weight: 600;
+  flex: 1 1 240px; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface);
+  font-size: 14px;
 `;
+export const ItemHead = styled.div`display: flex; align-items: center; gap: 10px; font-weight: 600;`;
 export const ItemLabel = styled.span`flex: 1;`;
+export const SegLine = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border);`;
+export const SegName = styled.span`
+  display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+  & > :last-child { margin-left: auto; font-weight: 500; }
+`;
+export const Picks = styled.div`display: flex; flex-wrap: wrap; gap: 6px;`;
+export const PickChip = styled.span`
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); font-size: 13px;
+  & > span { font-size: 12px; }
+`;

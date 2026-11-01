@@ -34,6 +34,12 @@ export const ClassSelect = styled.select`
   option { background: var(--surface); color: var(--text); }
 `;
 
+/** Class picker over the segment picker. */
+export const ClassCell = styled.div.attrs({ role: 'cell' })`display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0;`;
+export const SegmentSelect = styled(ClassSelect)`
+  font-weight: 500; color: var(--muted); background-color: transparent; padding-top: 2px; padding-bottom: 2px;
+`;
+
 export const MutedCell = styled(Cell)`color: var(--muted);`;
 export const BalanceCell = styled(Cell)`font-weight: 600;`;
 export const ResultCell = styled.div.attrs({ role: 'cell' })`display: flex; flex-direction: column; align-items: flex-end; gap: 3px;`;

@@ -5,30 +5,24 @@ import type {
 } from '../shared/types.ts';
 import type { PluggyAccount, PluggyInvestment, PluggyInvestmentTx, PluggyItem } from './pluggy-types.ts';
 import { pluggy, pluggyAll, mapLimit } from './pluggy.ts';
-import { HISTORY_FILE, OVERRIDES_FILE, loadItemIds, readJsonFile, writeJsonFile } from './storage.ts';
+import { ETF_SEGMENTS, isAbroad, isCrypto, parseTicker, segmentOf, type SegmentOverrides } from './segments.ts';
+import { HISTORY_FILE, OVERRIDES_FILE, SEGMENTS_FILE, loadItemIds, readJsonFile, writeJsonFile } from './storage.ts';
 
-export const CATEGORY_KEYS: CategoryKey[] = ['RENDA_FIXA', 'FII', 'ACOES', 'ETF', 'FUNDOS', 'PREVIDENCIA', 'OUTROS'];
+export const CATEGORY_KEYS: CategoryKey[] = ['RENDA_FIXA', 'FII', 'ACOES', 'ETF', 'EXTERIOR', 'CRIPTO', 'FUNDOS', 'PREVIDENCIA', 'OUTROS'];
 const DEFAULT_SUBTYPE: Partial<Record<CategoryKey, string>> = { FII: 'REAL_ESTATE_FUND', ETF: 'ETF', ACOES: 'STOCK' };
 
 export type Overrides = Record<string, CategoryKey>;
 
 // Many brokers (and Open Finance via MeuPluggy) report every B3 ticker as EQUITY/STOCK,
 // so ETFs, FIIs and units are told apart by ticker. "11" is shared by all three; anything
-// ending in 11 that isn't a known ETF or unit is assumed to be a FII (by far the most common).
-const KNOWN_ETFS = new Set(`
-  BOVA11 BOVV11 BOVB11 BOVX11 BOVS11 XBOV11 PIBB11 BRAX11 SMAL11 SMAC11 ECOO11 ISUS11 DIVO11 NDIV11
-  FIND11 MATB11 GOVE11 ESGB11 AUVP11 IVVB11 SPXI11 SPXB11 NASD11 TECK11 UTEC11 ACWI11 WRLD11 EURP11
-  XINA11 GOLD11 HASH11 QBTC11 BITH11 BITI11 ETHE11 QETH11 DEFI11 WEB311 IMAB11 IRFM11 IB5M11 B5P211
-  B5MB11 IMBB11 FIXA11 LFTS11 LFTB11 DEBB11 NTNS11
-`.trim().split(/\s+/));
+// ending in 11 that isn't a known ETF (see ETF_SEGMENTS) or unit is assumed to be a FII (by far the most common).
 const KNOWN_UNITS = new Set('TAEE11 KLBN11 SANB11 BPAC11 ALUP11 ENGI11 SAPR11 IGTI11 SULA11 BRBI11 RNEW11 CPLE11'.split(' '));
 
 function categoryFromTicker(code: string | null | undefined): { category: CategoryKey; subtype: string } | null {
-  const m = /^([A-Z0-9]{4})(\d{1,2})F?$/.exec((code ?? '').toUpperCase());
-  if (!m) return null;
-  const ticker = `${m[1]}${m[2]}`;
-  const suffix = Number(m[2]);
-  if (KNOWN_ETFS.has(ticker)) return { category: 'ETF', subtype: 'ETF' };
+  const t = parseTicker(code);
+  if (!t) return null;
+  const { ticker, suffix } = t;
+  if (ETF_SEGMENTS.has(ticker)) return { category: 'ETF', subtype: 'ETF' };
   if (KNOWN_UNITS.has(ticker)) return { category: 'ACOES', subtype: 'UNIT' };
   if (suffix === 11) return { category: 'FII', subtype: 'REAL_ESTATE_FUND' };
   if (suffix >= 12 && suffix <= 15) return { category: 'FII', subtype: 'SUBSCRIPTION_RIGHT' };
@@ -50,6 +44,12 @@ interface Categorized {
 function categorize(inv: PluggyInvestment, overrides: Overrides): Categorized {
   const manual = overrides[categoryKey(inv)];
   if (manual) return { category: manual, subtype: DEFAULT_SUBTYPE[manual] ?? inv.subtype ?? null, source: 'manual' };
+  const c = autoCategory(inv);
+  // Stocks, BDRs and ETFs invested outside Brazil get their own class, so the wallet shows how much is abroad.
+  return (c.category === 'ACOES' || c.category === 'ETF') && isAbroad(inv, c.category, c.subtype) ? { ...c, category: 'EXTERIOR' } : c;
+}
+
+function autoCategory(inv: PluggyInvestment): Categorized {
   const pluggyClass = (category: CategoryKey): Categorized => ({ category, subtype: inv.subtype ?? null, source: 'pluggy' });
   switch (inv.type) {
     case 'FIXED_INCOME': return pluggyClass('RENDA_FIXA');
@@ -64,7 +64,10 @@ function categorize(inv: PluggyInvestment, overrides: Overrides): Categorized {
       if (byTicker) return { ...byTicker, source: 'ticker' };
       return pluggyClass('ACOES');
     }
-    default: return pluggyClass('OUTROS');
+    default:
+      // Pluggy has no crypto type; exchanges and banks report coins as OTHER, so tell them apart by name.
+      if (isCrypto(inv)) return { category: 'CRIPTO', subtype: inv.subtype ?? null, source: 'name' };
+      return pluggyClass('OUTROS');
   }
 }
 
@@ -156,7 +159,7 @@ interface LoadedConnection extends Connection {
   withHistory: number;
 }
 
-async function loadConnection(id: string, overrides: Overrides): Promise<LoadedConnection> {
+async function loadConnection(id: string, overrides: Overrides, segmentOverrides: SegmentOverrides): Promise<LoadedConnection> {
   try {
     const [item, investments, accounts] = await Promise.all([
       pluggy<PluggyItem>(`/items/${id}`),
@@ -173,6 +176,7 @@ async function loadConnection(id: string, overrides: Overrides): Promise<LoadedC
 
     const mapped = investments.map((inv, idx): Investment => {
       const { category, subtype, source } = categorize(inv, overrides);
+      const { segment, segmentManual } = segmentOf(inv, categoryKey(inv), category, subtype, segmentOverrides);
       const label = inv.code || inv.name;
       let income12m = 0;
       let hasContribution = false;
@@ -210,6 +214,8 @@ async function loadConnection(id: string, overrides: Overrides): Promise<LoadedC
         category,
         categoryKey: categoryKey(inv),
         categorySource: source,
+        segment,
+        segmentManual,
         status: inv.status ?? null,
         balance: inv.balance ?? 0,
         amountOriginal: inv.amountOriginal ?? null,
@@ -269,8 +275,11 @@ async function recordSnapshot(connections: Connection[]): Promise<HistorySnapsho
 }
 
 export async function buildPortfolio(): Promise<Portfolio> {
-  const overrides = await readJsonFile<Overrides>(OVERRIDES_FILE, {});
-  const connections = await Promise.all((await loadItemIds()).map((id) => loadConnection(id, overrides)));
+  const [overrides, segmentOverrides] = await Promise.all([
+    readJsonFile<Overrides>(OVERRIDES_FILE, {}),
+    readJsonFile<SegmentOverrides>(SEGMENTS_FILE, {}),
+  ]);
+  const connections = await Promise.all((await loadItemIds()).map((id) => loadConnection(id, overrides, segmentOverrides)));
   const history = await recordSnapshot(connections);
   const totalAssets = connections.reduce((s, c) => s + c.investments.length, 0);
 

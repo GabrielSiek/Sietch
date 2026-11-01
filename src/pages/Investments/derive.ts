@@ -1,6 +1,7 @@
 // Investimentos: data derived from the portfolio (holdings, class totals, series, table rows).
-import type { Account, CategoryKey, CategorySource, Contribution, Investment, Portfolio } from '@shared/types';
-import { ASSET_CLASSES, CATEGORIES, CLASS_KEYS, cat, subtypeLabel, type ClassKey, type ColorVar } from '@/lib/categories';
+import type { Account, CategoryKey, CategorySource, Contribution, Goals, Investment, Portfolio } from '@shared/types';
+import { segmentsOf } from '@shared/segments';
+import { ASSET_CLASSES, CATEGORIES, CLASS_KEYS, GROUP_COLORS, cat, segmentColor, segmentLabel, subtypeLabel, type ClassKey, type ColorVar } from '@/lib/categories';
 import { addDays, addMonths, fmtMonthYear, num, plural, todayIso } from '@/lib/format';
 
 export const PERIODS: [label: string, days: number, word: string][] = [['1M', 30, 'no mês'], ['6M', 180, 'em 6 meses'], ['1A', 365, 'em 12 meses'], ['Tudo', 0, 'desde o início']];
@@ -24,9 +25,14 @@ export interface ClassSummary {
   count: number;
   profit: number;
   cost: number;
+  /** Money put in (cost, or the balance when unknown). */
+  invested: number;
+  income12m: number;
   monthW: number;
   monthV: number;
   subtypes: Record<string, number>;
+  /** Balance per segment ('' for assets without one); empty for classes that aren't split. */
+  segments: Record<string, number>;
 }
 
 export interface Derived {
@@ -87,25 +93,29 @@ export function derive(p: Portfolio): Derived {
   const yearAgo = addDays(todayIso(), -365);
   const income12m = p.income.filter((e) => e.date >= yearAgo).reduce((s, e) => s + e.amount, 0);
 
-  const classes = Object.fromEntries(CLASS_KEYS.map((key) => [key, { key, value: 0, count: 0, profit: 0, cost: 0, monthW: 0, monthV: 0, subtypes: {} }])) as Record<ClassKey, ClassSummary>;
+  const classes = Object.fromEntries(CLASS_KEYS.map((key) => [key, { key, value: 0, count: 0, profit: 0, cost: 0, invested: 0, income12m: 0, monthW: 0, monthV: 0, subtypes: {}, segments: {} }])) as Record<ClassKey, ClassSummary>;
   for (const i of investments) {
     const c = classes[i.category] ?? classes.OUTROS;
     c.value += i.balance;
     c.count += 1;
+    c.invested += i.cost ?? i.balance;
+    if (segmentsOf(i.category)) c.segments[i.segment ?? ''] = (c.segments[i.segment ?? ''] ?? 0) + i.balance;
     if (i.returnPct != null) { c.profit += i.amountProfit ?? 0; c.cost += i.cost ?? 0; }
     if (i.lastMonthRate != null) { c.monthW += i.balance; c.monthV += i.balance * i.lastMonthRate; }
     const st = i.category === 'FII' ? 'REAL_ESTATE_FUND' : i.subtype;
     if (st) c.subtypes[st] = (c.subtypes[st] ?? 0) + i.balance;
   }
+  for (const e of p.income) if (e.date >= yearAgo) (classes[e.category] ?? classes.OUTROS).income12m += e.amount;
   return { investments, accounts, cash, total, profit, cost, invested, income12m, classes };
 }
 
-export function growthSeries(p: Portfolio, d: Derived, days: number) {
+/** The wallet (or one class of it) over time: what it was worth each day and the money put in. */
+export function growthSeries(p: Portfolio, d: Derived, days: number, filter: ClassFilter = 'ALL') {
   const today = todayIso();
   const contrib = new Map<string, number>();
-  for (const c of p.contributions) contrib.set(c.date, (contrib.get(c.date) ?? 0) + c.delta);
-  const values = new Map(p.history.map((h) => [h.date, h.invested]));
-  values.set(today, d.total);
+  for (const c of p.contributions) if (filter === 'ALL' || c.category === filter) contrib.set(c.date, (contrib.get(c.date) ?? 0) + c.delta);
+  const values = new Map(p.history.map((h) => [h.date, filter === 'ALL' ? h.invested : h.byCategory?.[filter] ?? 0]));
+  values.set(today, filter === 'ALL' ? d.total : d.classes[filter].value);
   const first = [...contrib.keys(), ...values.keys()].sort()[0] ?? today;
   const start = days ? [first, addDays(today, -days)].sort()[1] : first;
   const labels: string[] = [], applied: number[] = [], value: (number | null)[] = [];
@@ -120,11 +130,24 @@ export function growthSeries(p: Portfolio, d: Derived, days: number) {
   return { labels, applied, value };
 }
 
-export interface DonutRow { key: CategoryKey; label: string; value: number; color: ColorVar }
+export interface DonutRow { key: string; label: string; value: number; color: ColorVar }
 
-export function donutRows(d: Derived): DonutRow[] {
-  return ASSET_CLASSES.filter((k) => d.classes[k].value > 0)
-    .map((k) => ({ key: k, label: CATEGORIES[k].label, value: d.classes[k].value, color: CATEGORIES[k].color }));
+/** The wallet by class, or one class by segment (by subtype for classes that aren't split). */
+export function donutRows(d: Derived, filter: ClassFilter = 'ALL'): DonutRow[] {
+  if (filter === 'ALL') {
+    return ASSET_CLASSES.filter((k) => d.classes[k].value > 0)
+      .map((k) => ({ key: k, label: CATEGORIES[k].label, value: d.classes[k].value, color: CATEGORIES[k].color }));
+  }
+  const c = d.classes[filter];
+  const split = Boolean(segmentsOf(filter));
+  const rows: DonutRow[] = Object.entries(split ? c.segments : c.subtypes).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])
+    .map(([k, value], idx) => split
+      ? { key: k, label: segmentLabel(filter, k || null), value, color: segmentColor(k || null) }
+      : { key: k, label: subtypeLabel(k), value, color: GROUP_COLORS[idx % GROUP_COLORS.length] });
+  // Assets with no subtype reported.
+  const rest = c.value - rows.reduce((s, r) => s + r.value, 0);
+  if (rest > 0.005) rows.push({ key: '', label: 'Outros', value: rest, color: '--c-outros' });
+  return rows;
 }
 
 // ---------- Goals ----------
@@ -139,6 +162,65 @@ export function monthContributions(p: Portfolio) {
   const aportado = dated.filter((c) => monthKey(c.date) === thisMonth).reduce((s, c) => s + c.delta, 0);
   const netOf = (m: string) => dated.filter((c) => monthKey(c.date) === m).reduce((s, c) => s + c.delta, 0);
   return { thisMonth, monthAportes, aportado, netOf };
+}
+
+// ---------- Where to invest next ----------
+
+export interface PlanPick {
+  name: string;
+  /** Last quote, when you hold it (to estimate how many shares fit). */
+  price: number | null;
+  /** Not one of your go-tos: your smallest position there, suggested as a top-up. */
+  fallback: boolean;
+}
+export interface PlanSegment { segment: string | null; label: string; color: ColorVar; amount: number; picks: PlanPick[] }
+export interface PlanClass { key: CategoryKey; amount: number; segments: PlanSegment[] }
+
+/** Splits money among parts by how far each is below its target, biggest gap first. */
+function byGap<K extends string>(parts: { key: K; gap: number }[], amount: number) {
+  const open = parts.filter((x) => x.gap > 0.005);
+  const sum = open.reduce((s, x) => s + x.gap, 0);
+  return sum > 0 ? open.sort((a, b) => b.gap - a.gap).map((x) => ({ key: x.key, amount: (amount * x.gap) / sum })) : [];
+}
+
+function picksFor(d: Derived, g: Goals, k: CategoryKey, segment: string | null): PlanPick[] {
+  const lists = g.goTo?.[k] ?? {};
+  // segment null: the whole of a split class (no segment targets), so any of its go-tos.
+  const names = [...new Set(segment == null ? Object.values(lists).flat() : lists[segment] ?? [])].slice(0, 3);
+  const priced = (i: Holding | undefined) => (i && i.category !== 'RENDA_FIXA' ? i.value : null);
+  if (names.length) {
+    return names.map((name) => {
+      const held = d.investments.find((i) => (i.code ?? i.title).toUpperCase() === name.toUpperCase());
+      return { name, price: priced(held), fallback: false };
+    });
+  }
+  // No go-to set: top up the smallest position you already have there.
+  const smallest = d.investments
+    .filter((i) => i.category === k && i.balance > 0 && (!segment || i.segment === segment))
+    .sort((a, b) => a.balance - b.balance)[0];
+  return smallest ? [{ name: smallest.title, price: priced(smallest), fallback: true }] : [];
+}
+
+/**
+ * Where the rest of this month's contribution should go to bring the wallet closer to its targets without selling:
+ * by class, then by segment (when the class has segment targets), naming your go-to assets.
+ */
+export function contributionPlan(d: Derived, g: Goals, remaining: number): PlanClass[] {
+  if (remaining <= 0) return [];
+  const targets = g.allocation ?? {};
+  const newTotal = d.total + remaining;
+  const classes = byGap(ASSET_CLASSES.map((k) => ({ key: k, gap: ((targets[k] ?? 0) / 100) * newTotal - d.classes[k].value })), remaining);
+  return classes.map(({ key: k, amount }) => {
+    const c = d.classes[k];
+    const segs = segmentsOf(k);
+    const tg = g.segmentAllocation?.[k] ?? {};
+    const newValue = c.value + amount;
+    const split = segs ? byGap(Object.keys(segs).map((s) => ({ key: s, gap: ((tg[s] ?? 0) / 100) * newValue - (c.segments[s] ?? 0) })), amount) : [];
+    const segments: PlanSegment[] = split.length
+      ? split.map((x) => ({ segment: x.key, label: segmentLabel(k, x.key), color: segmentColor(x.key), amount: x.amount, picks: picksFor(d, g, k, x.key) }))
+      : [{ segment: null, label: CATEGORIES[k].label, color: CATEGORIES[k].color, amount, picks: picksFor(d, g, k, segs ? null : '') }];
+    return { key: k, amount, segments };
+  });
 }
 
 // ---------- Income ----------
@@ -167,6 +249,8 @@ export interface HoldingGroup {
   currencyCode: string;
   categoryKeys: string[];
   categorySource: CategorySource;
+  segment: string | null;
+  segmentManual: boolean;
   title: string;
   sub: string;
   hint: string;
@@ -200,6 +284,7 @@ function groupRow(key: string, lots: Holding[]): HoldingGroup {
   return {
     group: key, lots: shown, category: first.category, short: first.short, currencyCode: first.currencyCode,
     categoryKeys: lots.map((i) => i.categoryKey), categorySource: first.categorySource,
+    segment: first.segment, segmentManual: first.segmentManual,
     title: treasury ? first.title : [subtypeLabel(first.subtype) || 'Renda fixa', first.rateLabel].filter(Boolean).join(' '),
     sub: [treasury ? null : shortIssuer(first), plural(shown.length, 'aplicação', 'aplicações')].filter(Boolean).join(' · '),
     hint: range,

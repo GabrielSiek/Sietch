@@ -44,7 +44,8 @@ function SpendKpi({ c, month, account }: { c: Computed; month: string; account: 
   );
 }
 
-// Everything that went into investments this month, against the monthly contribution goal.
+// New money put into investments this month (applications − redemptions, so moving money from one
+// investment to another counts as zero), against the monthly contribution goal.
 function InvestKpi({ c, goals, month }: { c: Computed; goals: Goals; month: string }) {
   const applied = sum(c.cur.investOut);
   const redeemed = sum(c.cur.investIn);
@@ -54,7 +55,7 @@ function InvestKpi({ c, goals, month }: { c: Computed; goals: Goals; month: stri
   return (
     <Styled.Kpi>
       <Styled.Top>Investido em {fmtMonthName(month)}<Styled.Ico><Icon d={ICON.investimentos} /></Styled.Ico></Styled.Top>
-      <Styled.Value>{brl(applied)}</Styled.Value>
+      <Styled.Value $tone={net < 0 ? 'neg' : undefined}>{net < 0 ? '−' : ''}{brl(Math.abs(net))}</Styled.Value>
       {r != null && (
         <Styled.Progress>
           <Bar><BarFill $value={r} $color={r >= 1 ? '--pos' : '--c-rf'} /></Bar>
@@ -64,8 +65,8 @@ function InvestKpi({ c, goals, month }: { c: Computed; goals: Goals; month: stri
       <Styled.Meta>
         {c.cur.investOut.length || c.cur.investIn.length
           ? <>
-            <span>{plural(c.cur.investOut.length, 'aplicação', 'aplicações')}</span>
-            {redeemed ? <span>{brl(redeemed)} recebidos de volta · líquido {net < 0 ? '−' : '+'}{brl(Math.abs(net))}</span> : null}
+            <span>{brl(applied)} aplicados{redeemed ? ` − ${brl(redeemed)} resgatados` : ''}</span>
+            {net < 0 && <span>resgatou mais do que aplicou</span>}
             {c.renda > 0 && net > 0 && <Chip $tone="accent">{num((net / c.renda) * 100, 1)}% da renda</Chip>}
           </>
           : <span>Nenhuma aplicação no mês{goal ? '' : <> · defina uma meta de aporte em <a href="#/configuracoes">Configurações</a></>}</span>}

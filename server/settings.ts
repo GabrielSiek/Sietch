@@ -1,11 +1,14 @@
 // ---------- Settings (goals, budgets, transaction category rules) ----------
 
 import type { CategoryKey, Goals, Group, Settings } from '../shared/types.ts';
+import { isSegmentOf, segmentsOf } from '../shared/segments.ts';
 import { HttpError } from './http-error.ts';
 import { CATEGORY_KEYS } from './portfolio.ts';
 import { SETTINGS_FILE, readJsonFile } from './storage.ts';
 
-const DEFAULT_GOALS: Goals = { monthlyContribution: null, wealthTarget: null, wealthDate: null, monthlyRate: 0.9, allocation: {} };
+const DEFAULT_GOALS: Goals = {
+  monthlyContribution: null, wealthTarget: null, wealthDate: null, monthlyRate: 0.9, allocation: {}, segmentAllocation: {}, goTo: {},
+};
 
 export async function loadSettings(): Promise<Settings> {
   const s = await readJsonFile<Partial<Settings>>(SETTINGS_FILE, {});
@@ -76,6 +79,31 @@ export function cleanGoals(g: Record<string, unknown> = {}): Goals {
     const n = positiveOrNull(v);
     if (n === undefined || (n != null && n > 100)) throw new HttpError(400, `allocation.${k} must be between 0 and 100.`);
     if (n) goals.allocation[k as CategoryKey] = n;
+  }
+  goals.segmentAllocation = {};
+  for (const [k, segs] of Object.entries((g.segmentAllocation ?? {}) as Record<string, Record<string, unknown>>)) {
+    if (!CATEGORY_KEYS.includes(k as CategoryKey)) continue;
+    const out: Record<string, number> = {};
+    for (const [s, v] of Object.entries(segs ?? {})) {
+      if (!isSegmentOf(k as CategoryKey, s)) continue;
+      const n = positiveOrNull(v);
+      if (n === undefined || (n != null && n > 100)) throw new HttpError(400, `segmentAllocation.${k}.${s} must be between 0 and 100.`);
+      if (n) out[s] = n;
+    }
+    if (Object.keys(out).length) goals.segmentAllocation[k as CategoryKey] = out;
+  }
+  // Up to 3 assets per segment ('' is the whole class for classes that aren't split).
+  goals.goTo = {};
+  for (const [k, segs] of Object.entries((g.goTo ?? {}) as Record<string, Record<string, unknown>>)) {
+    if (!CATEGORY_KEYS.includes(k as CategoryKey)) continue;
+    const split = Boolean(segmentsOf(k as CategoryKey));
+    const out: Record<string, string[]> = {};
+    for (const [s, list] of Object.entries(segs ?? {})) {
+      if (split ? !isSegmentOf(k as CategoryKey, s) : s !== '') continue;
+      const names = [...new Set((Array.isArray(list) ? list : []).map((x) => String(x).trim().slice(0, 40)).filter(Boolean))].slice(0, 3);
+      if (names.length) out[s] = names;
+    }
+    if (Object.keys(out).length) goals.goTo[k as CategoryKey] = out;
   }
   return goals;
 }

@@ -1,5 +1,6 @@
 // Investment classes, Pluggy subtypes, group colors and connection statuses.
 import type { CategoryKey, Connection } from '@shared/types';
+import { segmentsOf } from '@shared/segments';
 import type { IconName } from './icons';
 import type { Tone } from '@/components/ui';
 
@@ -18,6 +19,8 @@ export const CATEGORIES: Record<ClassKey, ClassMeta> = {
   ACOES: { label: 'Ações', short: 'AÇ', color: '--c-acoes', icon: 'acoes' },
   FII: { label: 'FIIs', short: 'FII', color: '--c-fii', icon: 'fii' },
   ETF: { label: 'ETFs', short: 'ETF', color: '--c-etf', icon: 'etf' },
+  EXTERIOR: { label: 'Exterior', short: 'EXT', color: '--c-ext', icon: 'exterior' },
+  CRIPTO: { label: 'Cripto', short: '₿', color: '--c-cripto', icon: 'cripto' },
   FUNDOS: { label: 'Fundos', short: 'FD', color: '--c-fundos', icon: 'fundos' },
   PREVIDENCIA: { label: 'Previdência', short: 'PV', color: '--c-prev', icon: 'prev' },
   OUTROS: { label: 'Outros', short: '•••', color: '--c-outros', icon: 'outros' },
@@ -40,6 +43,16 @@ export const SUBTYPES: Record<string, string> = {
 };
 export const subtypeLabel = (s: string | null | undefined) =>
   (s ? SUBTYPES[s] ?? s.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : '');
+
+// Fixed color per segment, distinct within its class.
+const SEGMENT_COLORS: Record<string, ColorVar> = {
+  POS: '--c-rf', INFLACAO: '--c-prev', PRE: '--c-acoes',
+  EXT_ACOES: '--c-acoes', EXT_ETF: '--c-etf',
+  TIJOLO: '--c-fii', PAPEL: '--c-rf', HIBRIDO: '--c-acoes', FOF: '--c-etf',
+  ACOES_BR: '--c-acoes', ACOES_GLOBAL: '--c-fii', RENDA_FIXA: '--c-rf', OURO: '--c-etf', CRIPTO: '--c-cripto',};
+export const NO_SEGMENT = 'Sem segmento';
+export const segmentLabel = (category: CategoryKey, segment: string | null) => (segment && segmentsOf(category)?.[segment]) || NO_SEGMENT;
+export const segmentColor = (segment: string | null): ColorVar => (segment && SEGMENT_COLORS[segment]) || '--c-outros';
 
 // Fixed color per spending group, by its position in your list.
 export const GROUP_COLORS: ColorVar[] = ['--c-acoes', '--c-fii', '--c-etf', '--c-rf', '--c-fundos', '--c-prev'];

@@ -11,6 +11,7 @@ export const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'data');
 const DATA_FILE = join(DATA_DIR, 'items.json');
 export const HISTORY_FILE = join(DATA_DIR, 'history.json');
 export const OVERRIDES_FILE = join(DATA_DIR, 'categories.json'); // { "TICKER": "ETF", ... } set from the UI
+export const SEGMENTS_FILE = join(DATA_DIR, 'segments.json'); // { "TICKER": "PAPEL", ... } set from the UI
 export const SETTINGS_FILE = join(DATA_DIR, 'settings.json'); // goals, budgets and transaction category rules
 
 export async function readJsonFile<T>(file: string, fallback: T): Promise<T> {

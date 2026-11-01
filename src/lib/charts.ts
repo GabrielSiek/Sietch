@@ -4,6 +4,26 @@ import { Chart, registerables, type Plugin, type ScriptableContext, type Tooltip
 
 Chart.register(...registerables);
 
+// Charts that have had their first render: the entrance stagger only plays once, later updates morph in place.
+const introduced = new WeakSet<Chart>();
+Chart.register({ id: 'intro', afterUpdate: (chart: Chart) => { introduced.add(chart); } });
+
+export const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Entrance animation for a chart's first render: points and bars rise one after another, left to right,
+ * over `spread` ms; each dataset starts `perDataset` ms after the previous one (stacked bars build up).
+ */
+export function stagger(spread = 600, perDataset = 0) {
+  return {
+    delay: (ctx: { type: string; dataIndex: number; datasetIndex: number; chart: Chart }) => {
+      if (ctx.type !== 'data' || introduced.has(ctx.chart)) return 0;
+      const n = Math.max((ctx.chart.data.labels?.length ?? 1) - 1, 1);
+      return (ctx.dataIndex / n) * spread + ctx.datasetIndex * perDataset;
+    },
+  };
+}
+
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 export interface ChartTheme { text: string; muted: string; border: string; surface: string; accent: string; warn: string }
@@ -18,6 +38,7 @@ export function chartTheme(): ChartTheme {
 export function applyChartDefaults() {
   Chart.defaults.font.family = "'Geist', system-ui, sans-serif";
   Chart.defaults.color = cssVar('--muted');
+  Chart.defaults.set('animation', { duration: 800, easing: 'easeOutQuart' });
 }
 
 export function tooltip(t: ChartTheme): Partial<TooltipOptions> {
@@ -62,10 +83,4 @@ export function hexAlpha(hex: string, a: number) {
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
   const n = parseInt(full, 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-}
-
-/** SVG path for a sparkline in a w×h box. */
-export function sparkPath(vals: number[], w = 200, h = 44, pad = 4) {
-  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
-  return vals.map((v, i) => `${i ? 'L' : 'M'}${((i / Math.max(vals.length - 1, 1)) * w).toFixed(1)},${(pad + (1 - (v - lo) / span) * (h - 2 * pad)).toFixed(1)}`).join(' ');
 }

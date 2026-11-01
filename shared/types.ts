@@ -2,7 +2,7 @@
 
 // ---------- Investments ----------
 
-export type CategoryKey = 'RENDA_FIXA' | 'ACOES' | 'FII' | 'ETF' | 'FUNDOS' | 'PREVIDENCIA' | 'OUTROS';
+export type CategoryKey = 'RENDA_FIXA' | 'ACOES' | 'FII' | 'ETF' | 'EXTERIOR' | 'CRIPTO' | 'FUNDOS' | 'PREVIDENCIA' | 'OUTROS';
 /** Where an asset's class came from: Pluggy's type, the ticker, the name, or you (set in the holdings table). */
 export type CategorySource = 'pluggy' | 'ticker' | 'name' | 'manual';
 
@@ -22,6 +22,10 @@ export interface Investment {
   category: CategoryKey;
   categoryKey: string;
   categorySource: CategorySource;
+  /** Where it sits inside its class (see shared/segments.ts); null when unknown or the class isn't split. */
+  segment: string | null;
+  /** The segment was set by you in the holdings table. */
+  segmentManual: boolean;
   status: string | null;
   balance: number;
   amountOriginal: number | null;
@@ -130,6 +134,10 @@ export interface Goals {
   monthlyRate: number;
   /** Target % of the wallet per class. */
   allocation: Partial<Record<CategoryKey, number>>;
+  /** Target % of each segment within its class (e.g. FII: { TIJOLO: 60, PAPEL: 40 }). */
+  segmentAllocation: Partial<Record<CategoryKey, Record<string, number>>>;
+  /** Assets you'd buy next, per class and segment ('' for classes that aren't split). */
+  goTo: Partial<Record<CategoryKey, Record<string, string[]>>>;
 }
 
 export interface Group {
