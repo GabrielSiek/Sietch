@@ -6,7 +6,7 @@ import { Page } from '@/components/Page';
 export function SetupPage() {
   const rejected = useStore((s) => Boolean(s.status?.configured && s.status.authError));
   return (
-    <Page title="Bem-vindo ao Fluxo" sub="Configuração">
+    <Page title="Bem-vindo ao Sietch" sub="Configuração">
       <Notice $error={rejected}>
         <h2>{rejected ? 'A Pluggy recusou as credenciais' : 'Conectar a Pluggy'}</h2>
         <p>

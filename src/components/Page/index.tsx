@@ -16,7 +16,7 @@ interface PageProps {
 }
 
 export function Page({ title, sub, actions, children }: PageProps) {
-  useEffect(() => { document.title = `${title} · Fluxo`; }, [title]);
+  useEffect(() => { document.title = `${title} · Sietch`; }, [title]);
   return (
     <Styled.Container>
       <Styled.Head>

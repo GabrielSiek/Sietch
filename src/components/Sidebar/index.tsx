@@ -20,7 +20,7 @@ export function Sidebar({ route }: { route: Route }) {
     <Styled.Container>
       <Styled.Brand>
         <Styled.BrandMark><Icon d={ICON.brand} size={20} strokeWidth={2.2} /></Styled.BrandMark>
-        <Styled.BrandName>Fluxo</Styled.BrandName>
+        <Styled.BrandName>Sietch</Styled.BrandName>
       </Styled.Brand>
       <Styled.Nav aria-label="Principal">
         <Styled.NavTitle>Menu</Styled.NavTitle>

@@ -1,4 +1,4 @@
-# Fluxo
+# Sietch
 
 A personal finance app for a Brazilian investor: investments, goals and spending in one place. Data comes from your banks and brokers through [Pluggy](https://pluggy.ai). The design follows the "App financeiro" canvas.
 
@@ -43,7 +43,7 @@ In **Contas conectadas → Conectar conta**, pick **Pluggy Bank** (sandbox) and 
 ### Connecting your real accounts
 Trial applications can connect real institutions through **MeuPluggy**:
 1. Create an account at [meu.pluggy.ai](https://meu.pluggy.ai) and link your banks and brokers there.
-2. In Fluxo, open **Contas conectadas → Conectar conta**, choose **MeuPluggy** and log in.
+2. In Sietch, open **Contas conectadas → Conectar conta**, choose **MeuPluggy** and log in.
 
 ## Where each number comes from
 
@@ -61,7 +61,7 @@ Trial applications can connect real institutions through **MeuPluggy**:
 | Credit cards | The account's `balance` and `creditData` (limit, available limit, closing and due dates) |
 | Goals, budgets, rules | Set by you in **Configurações** and saved in `data/settings.json` |
 
-How complete the data is depends on the institution. Some don't report transactions, profit or rates, and Fluxo shows "—" in those cases. Snapshots are only saved while the server is running (on start, then every 6 hours, plus whenever you open the page). If you test with sandbox data, delete `data/history.json` before you switch to real accounts.
+How complete the data is depends on the institution. Some don't report transactions, profit or rates, and Sietch shows "—" in those cases. Snapshots are only saved while the server is running (on start, then every 6 hours, plus whenever you open the page). If you test with sandbox data, delete `data/history.json` before you switch to real accounts.
 
 ## How it works
 
