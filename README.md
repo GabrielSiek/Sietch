@@ -2,6 +2,8 @@
 
 A personal finance app for a Brazilian investor: investments, goals and spending in one place. Data comes from your banks and brokers through [Pluggy](https://pluggy.ai). The design follows the "App financeiro" canvas.
 
+The name comes from *Dune*: a sietch is the hidden community where the Fremen store and protect their most valuable resource, water, so none of it is wasted. Same idea here, applied to money.
+
 **Investimentos**
 - **Patrimônio investido:** current value against accumulated contributions (*valor aplicado*) for 1M / 6M / 1A / Tudo, plus total invested, result, total return, 12‑month dividends and cash in your accounts
 - **Distribuição da carteira:** donut chart by asset class
